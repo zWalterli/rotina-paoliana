@@ -398,7 +398,7 @@ async function carregar() {
     estado.tarefas = dados.tarefas || [];
     $('#tela-pin').hidden = true;
     $('#app').hidden = false;
-    setStatus('Salvo na nuvem: aparece igual em qualquer aparelho');
+    setStatus('');
     renderAtual();
   } catch (e) {
     if (e.pin) pedirPin('PIN incorreto. Tente de novo.');
@@ -411,7 +411,7 @@ function naFila(chave, acao) {
   setStatus('Salvando…');
   filas[chave] = (filas[chave] || Promise.resolve()).then(acao).then(() => {
     estado.pendentes--;
-    if (!estado.pendentes) setStatus('Salvo na nuvem: aparece igual em qualquer aparelho');
+    if (!estado.pendentes) setStatus('');
   }, e => {
     estado.pendentes--;
     if (e && e.pin) pedirPin('O PIN mudou. Digite o novo PIN.');
