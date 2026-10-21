@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0e6a5b">
+<title>Rotina do Faturamento da Paoliana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: uma coluna estreita, agenda em linha do tempo (hora | tarefa), calendário mensal em grade de 7 colunas */
+:root {
+  --bg: #eef2f1;
+  --surface: #ffffff;
+  --fg: #16201e;
+  --muted: #5a6865;
+  --line: #d6dfdc;
+  --accent: #0e6a5b;
+  --accent-soft: #d9eee9;
+  --warn: #a65c06;
+  --warn-soft: #fbead3;
+  --special: #4a3da6;
+  --special-soft: #e6e2f8;
+  --danger: #b3261e;
+  --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1514; --surface: #172020; --fg: #e4ebe9; --muted: #93a39f; --line: #293533;
+    --accent: #4fc4ac; --accent-soft: #15352f; --warn: #f0a548; --warn-soft: #3a2a13;
+    --special: #aa9ef6; --special-soft: #262148; --danger: #ff8a80; color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+}
+.wrap {
+  max-width: 760px; margin: 0 auto;
+  padding-block: max(28px, env(safe-area-inset-top, 0px)) max(56px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 22px;
+}
+.view { display: flex; flex-direction: column; gap: 22px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.data { font-family: var(--font-display); font-size: clamp(1.7rem, 6vw, 2.4rem); font-weight: 700; line-height: 1.1; }
+header { display: flex; flex-direction: column; gap: 10px; }
+.status { font-size: .85rem; color: var(--muted); }
+.status.erro { color: var(--danger); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font-size: .8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.chip.esp { background: var(--special-soft); color: var(--special); }
+.chip.fix { background: var(--warn-soft); color: var(--warn); }
+.chip.off { background: var(--line); color: var(--muted); }
+
+.tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; align-self: flex-start; }
+.tabs button {
+  font: 600 .95rem var(--font-display); border: 0; background: none; color: var(--muted);
+  padding: 8px 18px; border-radius: 7px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--surface); }
+
+.nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn {
+  font: 600 .9rem var(--font-body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primario { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.ghost { background: none; border-color: transparent; color: var(--muted); }
+.btn.mini { font-size: .8rem; padding: 3px 8px; }
+.btn.perigo { color: var(--danger); border-color: var(--danger); }
+.btn:disabled { opacity: .6; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, .dia:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.progresso { display: flex; flex-direction: column; gap: 6px; }
+.progresso .rotulo { display: flex; justify-content: space-between; font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.barra { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.barra span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+
+section.bloco { display: flex; flex-direction: column; gap: 8px; }
+.bloco h2 { font-size: 1.15rem; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bloco h2 small { font: 400 .85rem var(--font-mono); color: var(--muted); }
+
+ol.agenda { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.agenda li {
+  display: grid; grid-template-columns: 76px 1fr; gap: 12px;
+  padding: 12px 14px; border-top: 1px solid var(--line);
+}
+.agenda li:first-child { border-top: 0; }
+.hora { font: 600 .95rem var(--font-mono); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
+.hora small { font-weight: 400; color: var(--muted); font-size: .78rem; }
+.corpo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.item { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; min-width: 0; }
+.item input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; cursor: pointer; }
+.txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.txt strong { font-weight: 700; }
+.det { color: var(--muted); font-size: .9rem; }
+.txt .chips { margin-top: 3px; }
+.acoes { display: flex; gap: 6px; padding-left: 30px; }
+.agenda li.feito .txt strong { text-decoration: line-through; color: var(--muted); }
+.agenda li.agora { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.agenda li.agora .hora { color: var(--accent); }
+.agenda li.fixo .hora { color: var(--warn); }
+.pausa { color: var(--muted); font-size: .9rem; padding: 4px 14px; font-family: var(--font-mono); }
+
+.extras ol.agenda li { grid-template-columns: 1fr; }
+.aviso { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 18px; color: var(--muted); }
+.aviso strong { color: var(--fg); }
+
+form.form {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+form.form h2 { font-size: 1.15rem; }
+.campo { display: flex; flex-direction: column; gap: 5px; font-size: .9rem; font-weight: 700; min-width: 0; }
+.campo input, .campo select {
+  font: 400 1rem var(--font-body); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%;
+}
+.grade2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.erro-form { color: var(--danger); font-size: .9rem; margin: 0; }
+#tela-pin form { max-width: 360px; }
+
+/* Mês */
+.cal-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-topo h2 { font-size: 1.3rem; text-transform: capitalize; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal .sem { text-align: center; font-size: .75rem; font-weight: 700; letter-spacing: .06em; color: var(--muted); padding-bottom: 4px; }
+.dia {
+  aspect-ratio: 1 / 1; max-width: 100%; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 8px; padding: 5px; display: flex; flex-direction: column; justify-content: space-between;
+  font: 600 .95rem var(--font-mono); color: var(--fg); cursor: pointer; text-align: left;
+}
+.dia.vazio { visibility: hidden; }
+.dia.fds { background: transparent; color: var(--muted); }
+.dia.esp { background: var(--special-soft); border-color: var(--special); }
+.dia.hoje { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dia.sel { box-shadow: 0 0 0 2px var(--fg); }
+.marcas { display: flex; gap: 3px; flex-wrap: wrap; }
+.marca { font: 700 .65rem var(--font-body); font-style: normal; padding: 0 4px; border-radius: 4px; line-height: 1.5; }
+.marca.e { background: var(--special); color: var(--surface); }
+.marca.c { background: var(--accent); color: var(--surface); }
+.marca.a { background: var(--warn); color: var(--surface); }
+.legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: .85rem; color: var(--muted); }
+.legenda span { display: inline-flex; align-items: center; gap: 6px; }
+ul.datas { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+ul.datas li { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+ul.datas li:first-child { border-top: 0; }
+ul.datas .d { font: 600 .95rem var(--font-mono); }
+ul.datas span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.nota { font-size: .85rem; color: var(--muted); max-width: 65ch; margin: 0; }
+
+@media (max-width: 420px) {
+  .agenda li, ul.datas li { grid-template-columns: 62px 1fr; gap: 10px; }
+  .dia { font-size: .8rem; padding: 3px; }
+  .marca { font-size: .55rem; padding: 0 2px; }
+  .grade2 { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .barra span { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Rotina do Faturamento da Paoliana</h1>
+    <div class="data" id="titulo-data"></div>
+    <div class="chips" id="chips-dia"></div>
+    <div class="status" id="status">Conectando…</div>
+  </header>
+
+  <section id="tela-pin" hidden>
+    <form class="form" id="form-pin" novalidate>
+      <h2 id="pin-titulo">Digite seu PIN</h2>
+      <label class="campo">PIN
+        <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12">
+      </label>
+      <p class="erro-form" id="pin-erro" hidden></p>
+      <div class="nav"><button type="submit" class="btn primario" id="pin-entrar">Entrar</button></div>
+      <p class="nota" id="pin-nota">Você só digita o PIN uma vez neste aparelho.</p>
+    </form>
+  </section>
+
+  <div id="app" class="view" hidden>
+    <div class="tabs" role="tablist">
+      <button id="tab-dia" role="tab" aria-selected="true">Dia</button>
+      <button id="tab-mes" role="tab" aria-selected="false">Mês</button>
+    </div>
+
+    <main id="view-dia" class="view">
+      <div class="nav">
+        <button class="btn" id="dia-ant" aria-label="Dia anterior">← Anterior</button>
+        <button class="btn" id="dia-hoje">Hoje</button>
+        <button class="btn" id="dia-prox" aria-label="Próximo dia">Próximo →</button>
+      </div>
+      <div class="progresso" id="progresso">
+        <div class="rotulo"><span>Concluídas</span><span id="prog-txt"></span></div>
+        <div class="barra"><span id="prog-barra"></span></div>
+      </div>
+      <div id="conteudo-dia" class="view"></div>
+
+      <button class="btn primario" id="abrir-form" style="align-self:flex-start">+ Adicionar atividade</button>
+      <form class="form" id="form-tarefa" hidden novalidate>
+        <h2>Nova atividade</h2>
+        <label class="campo">Atividade
+          <input id="f-titulo" maxlength="120" placeholder="Ex.: Conferir pedidos do cliente X">
+        </label>
+        <label class="campo">Detalhe (opcional)
+          <input id="f-det" maxlength="200" placeholder="Ex.: Mandar para o setor de vendas">
+        </label>
+        <div class="grade2">
+          <label class="campo">Quando
+            <select id="f-quando">
+              <option value="data">Só em uma data</option>
+              <option value="sempre">Todo dia útil</option>
+              <option value="diario">Só nos dias de rotina normal</option>
+              <option value="especifico">Só nos dias de tarefas específicas</option>
+            </select>
+          </label>
+          <label class="campo" id="f-data-wrap">Data
+            <input type="date" id="f-data">
+          </label>
+        </div>
+        <div class="grade2">
+          <label class="campo">Período
+            <select id="f-periodo">
+              <option value="manha">Manhã</option>
+              <option value="tarde">Tarde</option>
+              <option value="extra">Sem horário fixo</option>
+            </select>
+          </label>
+          <div class="grade2" id="f-horas">
+            <label class="campo">Início <input type="time" id="f-ini"></label>
+            <label class="campo">Fim <input type="time" id="f-fim"></label>
+          </div>
+        </div>
+        <p class="erro-form" id="f-erro" hidden></p>
+        <div class="nav">
+          <button type="submit" class="btn primario" id="f-salvar">Salvar atividade</button>
+          <button type="button" class="btn ghost" id="f-cancelar">Cancelar</button>
+        </div>
+      </form>
+
+      <div class="nav"><button class="btn ghost" id="limpar">Desmarcar tudo deste dia</button></div>
+    </main>
+
+    <main id="view-mes" class="view" hidden>
+      <div class="cal-topo">
+        <button class="btn" id="mes-ant" aria-label="Mês anterior">←</button>
+        <h2 id="mes-titulo"></h2>
+        <button class="btn" id="mes-prox" aria-label="Próximo mês">→</button>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div class="legenda">
+        <span><i class="marca e">ESP</i> Tarefas específicas (08, 15, 21 e último dia)</span>
+        <span><i class="marca c">CONT</i> Envio à contabilidade (dia 15 e 1º dia útil)</span>
+        <span><i class="marca a">+</i> Atividade adicionada para a data</span>
+      </div>
+      <section class="bloco">
+        <h2>Datas do mês</h2>
+        <ul class="datas" id="datas-mes"></ul>
+      </section>
+      <p class="nota">Toque em um dia do calendário para ver a rotina dele. Feriados não entram no cálculo do 1º dia útil. Quando uma data específica cair no fim de semana, confirme com a gestão se ela vai para sexta ou para segunda.</p>
+    </main>
+  </div>
+</div>
+
+<script>
+// Projeto Supabase (Settings → API). A chave pública pode ficar aqui: o banco só responde com o PIN certo.
+const SUPABASE_URL = 'https://ajwmcegdmylqzpzxbdwm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_TINc8doNhvyzzUMi7bmrKw_zviDsc8C';
+
+const DIARIO = {
+  manha: [
+    { id: 'm1', ini: '07:15', fim: '08:00', t: 'Conferir notas fiscais e boletos emitidos ontem', d: 'Depois de conferir, enviar ao setor de cobrança.' },
+    { id: 'm2', ini: '08:00', fim: '08:45', t: 'Lançar comissões de vendas' },
+    { id: 'm3', ini: '08:45', fim: '09:15', t: 'Verificar e-mails e imprimir orçamentos para faturamento' },
+    { id: 'm4', ini: '09:15', fim: '10:30', t: 'Separar orçamentos para emissão de notas fiscais' },
+    { id: 'm5', ini: '10:30', fim: '11:30', t: 'Emitir códigos de rastreamento' }
+  ],
+  tarde: [
+    { id: 't1', ini: '13:00', fim: '15:30', t: 'Emitir notas fiscais e boletos' },
+    { id: 't2', ini: '15:30', fim: '16:00', t: 'Verificar e-mails e imprimir orçamentos para faturamento', d: 'Segunda rodada do dia.' },
+    { id: 't3', ini: '16:00', fim: '16:45', t: 'Emitir notas dos orçamentos que chegaram à tarde', d: 'Deixar tudo emitido antes da remessa.' },
+    { id: 't4', ini: '16:45', fim: '16:50', t: 'Enviar remessa de boletos ao setor financeiro', fixo: true },
+    { id: 't5', ini: '16:50', fim: '17:15', t: 'Atualizar e fechar as planilhas diárias' }
+  ],
+  extras: [
+    { id: 'x1', t: 'Verificar retornos dos boletos de ontem', d: 'Sem horário fixo: fazer assim que o setor responsável enviar.' }
+  ]
+};
+
+const ESPECIFICO = {
+  manha: [
+    { id: 'em1', ini: '07:15', fim: '08:30', t: 'Imprimir notas fiscais de saída e de venda das três empresas' },
+    { id: 'em2', ini: '08:30', fim: '10:00', t: 'Lançar notas fiscais de compras no sistema' },
+    { id: 'em3', ini: '10:00', fim: '11:30', t: 'Organizar o módulo financeiro de contas a receber' }
+  ],
+  tarde: [
+    { id: 'et1', ini: '13:00', fim: '13:30', t: 'Verificar e-mails e imprimir orçamentos para faturamento' },
+    { id: 'et2', ini: '13:30', fim: '14:00', t: 'Separar orçamentos para emissão de notas fiscais' },
+    { id: 'et3', ini: '14:00', fim: '16:45', t: 'Emitir notas fiscais e boletos' },
+    { id: 'et4', ini: '16:45', fim: '16:50', t: 'Enviar remessa de boletos ao setor financeiro', fixo: true },
+    { id: 'et5', ini: '16:50', fim: '17:15', t: 'Atualizar e fechar as planilhas diárias' }
+  ],
+  extras: []
+};
+
+const CONTAB = { id: 'c1', t: 'Enviar movimento de notas fiscais à contabilidade', d: 'Fazer logo no início da manhã.' };
+
+const QUANDO_TXT = {
+  sempre: 'Todo dia útil', diario: 'Dias de rotina normal', especifico: 'Dias de tarefas específicas'
+};
+
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const semHora = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const minutos = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function ultimoDia(y, m) { return new Date(y, m + 1, 0).getDate(); }
+function primeiroDiaUtil(y, m) {
+  for (let dia = 1; ; dia++) { const w = new Date(y, m, dia).getDay(); if (w !== 0 && w !== 6) return dia; }
+}
+function tipoDia(d) {
+  const y = d.getFullYear(), m = d.getMonth(), dia = d.getDate(), w = d.getDay();
+  return {
+    fds: w === 0 || w === 6,
+    especifico: dia === 8 || dia === 15 || dia === 21 || dia === ultimoDia(y, m),
+    contab: dia === 15 || dia === primeiroDiaUtil(y, m)
+  };
+}
+
+/* ---------- Armazenamento: Supabase, protegido por PIN ---------- */
+const local = {
+  ler(chave, padrao) { try { return JSON.parse(localStorage.getItem('rotina:' + chave)) ?? padrao; } catch { return padrao; } },
+  gravar(chave, valor) { try { localStorage.setItem('rotina:' + chave, JSON.stringify(valor)); } catch {} },
+  apagar(chave) { try { localStorage.removeItem('rotina:' + chave); } catch {} }
+};
+
+const estado = { pin: local.ler('pin', null), marcas: {}, tarefas: [], pendentes: 0 };
+const filas = {};
+
+async function rpc(fn, args) {
+  const headers = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };
+  if (!SUPABASE_KEY.startsWith('sb_')) headers.Authorization = 'Bearer ' + SUPABASE_KEY;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: 'POST', headers, body: JSON.stringify(args) });
+  const corpo = await r.text();
+  const json = corpo ? JSON.parse(corpo) : null;
+  if (!r.ok) throw { pin: json?.code === '28P01', mensagem: json?.message || String(r.status) };
+  return json;
+}
+
+function setStatus(txt, erro) {
+  const el = $('#status');
+  el.textContent = txt;
+  el.classList.toggle('erro', !!erro);
+}
+
+let criandoPin = false;
+async function pedirPin(msg) {
+  estado.pin = null;
+  local.apagar('pin');
+  $('#app').hidden = true;
+  $('#tela-pin').hidden = false;
+  $('#pin-erro').textContent = msg || '';
+  $('#pin-erro').hidden = !msg;
+  try { criandoPin = !(await rpc('rotina_tem_pin', {})); } catch { criandoPin = false; }
+  $('#pin-titulo').textContent = criandoPin ? 'Crie seu PIN' : 'Digite seu PIN';
+  $('#pin-entrar').textContent = criandoPin ? 'Criar PIN' : 'Entrar';
+  $('#pin-nota').textContent = criandoPin
+    ? 'Primeiro acesso: escolha de 6 a 12 números. Guarde bem, ele protege a sua rotina.'
+    : 'Você só digita o PIN uma vez neste aparelho.';
+  setStatus(criandoPin ? 'Crie um PIN para começar' : 'Digite o PIN para abrir a rotina');
+  $('#pin').focus();
+}
+
+async function carregar() {
+  if (!estado.pin || estado.pendentes) return;
+  try {
+    const dados = await rpc('rotina_dados', { p: estado.pin });
+    if (estado.pendentes) return;
+    estado.marcas = dados.marcas || {};
+    estado.tarefas = dados.tarefas || [];
+    $('#tela-pin').hidden = true;
+    $('#app').hidden = false;
+    setStatus('Salvo na nuvem: aparece igual em qualquer aparelho');
+    renderAtual();
+  } catch (e) {
+    if (e.pin) pedirPin('PIN incorreto. Tente de novo.');
+    else setStatus('Sem conexão. Confira a internet; a página tenta de novo sozinha.', true);
+  }
+}
+
+function naFila(chave, acao) {
+  estado.pendentes++;
+  setStatus('Salvando…');
+  filas[chave] = (filas[chave] || Promise.resolve()).then(acao).then(() => {
+    estado.pendentes--;
+    if (!estado.pendentes) setStatus('Salvo na nuvem: aparece igual em qualquer aparelho');
+  }, e => {
+    estado.pendentes--;
+    if (e && e.pin) pedirPin('O PIN mudou. Digite o novo PIN.');
+    else setStatus('Não foi possível salvar. Confira a internet e marque de novo.', true);
+    carregar();
+  });
+}
+
+function marcasDe(chave) { return new Set(estado.marcas[chave] || []); }
+
+function salvarMarcas(chave, set) {
+  estado.marcas[chave] = [...set];
+  naFila('marcas/' + chave, () => rpc('rotina_set_marcas', { p: estado.pin, p_dia: chave, p_ids: estado.marcas[chave] || [] }));
+}
+
+function adicionarTarefa(t) {
+  const temp = { ...t, docId: 'novo-' + Date.now() };
+  estado.tarefas.push(temp);
+  renderAtual();
+  naFila('tarefas', async () => {
+    temp.docId = await rpc('rotina_add_tarefa', { p: estado.pin, p_t: t });
+    renderAtual();
+  });
+}
+
+function removerTarefa(docId) {
+  estado.tarefas = estado.tarefas.filter(t => t.docId !== docId);
+  renderAtual();
+  naFila('tarefas', () => rpc('rotina_del_tarefa', { p: estado.pin, p_id: docId }));
+}
+
+/* ---------- Atividades adicionadas ---------- */
+function aplicaEm(t, d, tipo) {
+  if (t.quando === 'data') return t.data === iso(d);
+  if (tipo.fds) return false;
+  if (t.quando === 'sempre') return true;
+  if (t.quando === 'diario') return !tipo.especifico;
+  if (t.quando === 'especifico') return tipo.especifico;
+  return false;
+}
+function comoItem(t) {
+  return { id: 'u-' + t.docId, docId: t.docId, t: t.t, d: t.d, ini: t.ini || '', fim: t.fim || '', custom: true, quando: t.quando, periodo: t.periodo };
+}
+function porHorario(a, b) {
+  if (!a.ini) return 1;
+  if (!b.ini) return -1;
+  return minutos(a.ini) - minutos(b.ini);
+}
+
+/* ---------- Tela ---------- */
+let hoje = semHora(new Date());
+let sel = new Date(hoje);
+let mesVisto = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+let confirmando = null;
+
+function chipsDia(tipo) {
+  const c = [];
+  if (tipo.fds) c.push('<span class="chip off">Fim de semana</span>');
+  else c.push(tipo.especifico ? '<span class="chip esp">Dia de tarefas específicas</span>' : '<span class="chip">Rotina diária</span>');
+  if (tipo.contab) c.push('<span class="chip">Envio à contabilidade</span>');
+  return c.join('');
+}
+
+function linha(it, marcas, agoraMin) {
+  const feito = marcas.has(it.id);
+  const fim = it.fim || (it.ini ? `${pad(Math.floor((minutos(it.ini) + 30) / 60))}:${pad((minutos(it.ini) + 30) % 60)}` : '');
+  const agora = agoraMin != null && it.ini && minutos(it.ini) <= agoraMin && agoraMin < minutos(fim);
+  const cls = [feito && 'feito', agora && 'agora', it.fixo && 'fixo'].filter(Boolean).join(' ');
+  const hora = it.ini ? `<span class="hora">${it.ini}${it.fim ? `<small>até ${it.fim}</small>` : ''}</span>` : (it.semColuna ? '' : '<span class="hora"><small>sem hora</small></span>');
+  const chips = [
+    it.fixo && '<span class="chip fix">Horário fixo</span>',
+    agora && '<span class="chip">Agora</span>',
+    it.custom && `<span class="chip off">Adicionada${it.quando !== 'data' ? ' · ' + QUANDO_TXT[it.quando] : ''}</span>`
+  ].filter(Boolean).join('');
+  const acoes = it.custom && !String(it.docId).startsWith('novo-')
+    ? `<div class="acoes">${confirmando === it.docId
+        ? `<button class="btn mini perigo" data-remover="${esc(it.docId)}">Confirmar remoção</button><button class="btn mini ghost" data-cancelar-remocao>Manter</button>`
+        : `<button class="btn mini ghost" data-pedir-remocao="${esc(it.docId)}">Remover</button>`}</div>`
+    : '';
+  return `<li class="${cls}">${hora}
+    <div class="corpo">
+      <label class="item"><input type="checkbox" id="chk-${esc(it.id)}" data-id="${esc(it.id)}" ${feito ? 'checked' : ''}>
+        <span class="txt"><strong>${esc(it.t)}</strong>${it.d ? `<span class="det">${esc(it.d)}</span>` : ''}${chips ? `<span class="chips">${chips}</span>` : ''}</span>
+      </label>${acoes}
+    </div></li>`;
+}
+
+function renderDia() {
+  const tipo = tipoDia(sel);
+  const chave = iso(sel);
+  const marcas = marcasDe(chave);
+  const titulo = sel.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#titulo-data').textContent = titulo.charAt(0).toUpperCase() + titulo.slice(1);
+  $('#chips-dia').innerHTML = chipsDia(tipo);
+
+  const custom = estado.tarefas.filter(t => aplicaEm(t, sel, tipo)).map(comoItem);
+  let extras, manha, tarde;
+  if (tipo.fds) {
+    extras = custom;
+    manha = []; tarde = [];
+  } else {
+    const plano = tipo.especifico ? ESPECIFICO : DIARIO;
+    extras = [...(tipo.contab ? [CONTAB] : []), ...plano.extras, ...custom.filter(i => i.periodo === 'extra')];
+    manha = [...plano.manha, ...custom.filter(i => i.periodo === 'manha')].sort(porHorario);
+    tarde = [...plano.tarde, ...custom.filter(i => i.periodo === 'tarde')].sort(porHorario);
+  }
+  extras = extras.map(i => ({ ...i, semColuna: true }));
+
+  const now = new Date();
+  const agoraMin = chave === iso(now) ? now.getHours() * 60 + now.getMinutes() : null;
+
+  let html = '';
+  if (tipo.fds) {
+    const extra = (tipo.especifico || tipo.contab)
+      ? ' Esta é uma data de tarefas específicas ou de envio à contabilidade. Confirme com a gestão se ela vai para sexta ou para segunda.' : '';
+    html += `<div class="aviso"><strong>Sem rotina neste dia.</strong>${extra}</div>`;
+  }
+  if (extras.length) {
+    html += `<section class="bloco extras"><h2>${tipo.fds ? 'Atividades deste dia' : 'Também hoje'} <small>sem horário na agenda</small></h2>
+      <ol class="agenda">${extras.map(it => linha(it, marcas, null)).join('')}</ol></section>`;
+  }
+  if (!tipo.fds) {
+    html += `<section class="bloco"><h2>Manhã <small>07:15–11:30</small></h2>
+      <ol class="agenda">${manha.map(it => linha(it, marcas, agoraMin)).join('')}</ol></section>
+      <div class="pausa">11:30–13:00 · almoço</div>
+      <section class="bloco"><h2>Tarde <small>13:00–17:15</small></h2>
+      <ol class="agenda">${tarde.map(it => linha(it, marcas, agoraMin)).join('')}</ol></section>`;
+  }
+  $('#conteudo-dia').innerHTML = html;
+
+  const todos = [...extras, ...manha, ...tarde];
+  $('#progresso').hidden = todos.length === 0;
+  $('#limpar').hidden = todos.length === 0;
+  if (todos.length) {
+    const ids = new Set(todos.map(i => i.id));
+    const feitos = [...marcas].filter(id => ids.has(id)).length;
+    $('#prog-txt').textContent = `${feitos} de ${todos.length}`;
+    $('#prog-barra').style.width = `${(feitos / todos.length) * 100}%`;
+  }
+}
+
+function renderMes() {
+  const y = mesVisto.getFullYear(), m = mesVisto.getMonth();
+  $('#mes-titulo').textContent = mesVisto.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  let html = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(s => `<div class="sem">${s}</div>`).join('');
+  const inicio = new Date(y, m, 1).getDay();
+  for (let i = 0; i < inicio; i++) html += '<div class="dia vazio"></div>';
+  const datas = [];
+  for (let dia = 1; dia <= ultimoDia(y, m); dia++) {
+    const d = new Date(y, m, dia);
+    const t = tipoDia(d);
+    const naData = estado.tarefas.filter(tf => tf.quando === 'data' && tf.data === iso(d));
+    const cls = ['dia', t.fds && 'fds', t.especifico && 'esp', iso(d) === iso(hoje) && 'hoje', iso(d) === iso(sel) && 'sel'].filter(Boolean).join(' ');
+    const marcas = (t.especifico ? '<i class="marca e">ESP</i>' : '') + (t.contab ? '<i class="marca c">CONT</i>' : '') + (naData.length ? '<i class="marca a">+</i>' : '');
+    html += `<button class="${cls}" data-dia="${dia}" aria-label="${d.toLocaleDateString('pt-BR')}">${dia}<span class="marcas">${marcas}</span></button>`;
+    if (t.especifico || t.contab || naData.length) {
+      const o = [];
+      if (t.especifico) o.push('Tarefas específicas');
+      if (t.contab) o.push(dia === 15 ? 'Envio à contabilidade' : 'Envio à contabilidade (1º dia útil)');
+      naData.forEach(tf => o.push(esc(tf.t)));
+      if (t.fds && (t.especifico || t.contab)) o.push('cai no fim de semana');
+      datas.push(`<li><span class="d">${pad(dia)} ${d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</span><span>${o.join(' · ')}</span></li>`);
+    }
+  }
+  $('#cal').innerHTML = html;
+  $('#datas-mes').innerHTML = datas.join('');
+}
+
+let aba = 'dia';
+function renderAtual() { aba === 'dia' ? renderDia() : renderMes(); }
+
+function mostrar(view) {
+  aba = view;
+  $('#view-dia').hidden = view !== 'dia';
+  $('#view-mes').hidden = view !== 'mes';
+  $('#tab-dia').setAttribute('aria-selected', view === 'dia');
+  $('#tab-mes').setAttribute('aria-selected', view === 'mes');
+  local.gravar('aba', view);
+  renderAtual();
+}
+
+function moverDia(n) { sel = new Date(sel.getFullYear(), sel.getMonth(), sel.getDate() + n); confirmando = null; renderDia(); }
+
+/* ---------- Formulários ---------- */
+$('#form-pin').onsubmit = async e => {
+  e.preventDefault();
+  const pin = $('#pin').value.trim();
+  if (!pin) return;
+  $('#pin-entrar').disabled = true;
+  if (criandoPin) {
+    try { await rpc('rotina_criar_pin', { p: pin }); }
+    catch (err) {
+      $('#pin-entrar').disabled = false;
+      $('#pin-erro').textContent = err.mensagem;
+      $('#pin-erro').hidden = false;
+      return;
+    }
+    criandoPin = false;
+  }
+  estado.pin = pin;
+  await carregar();
+  $('#pin-entrar').disabled = false;
+  if (estado.pin) { local.gravar('pin', pin); $('#pin').value = ''; }
+};
+
+function atualizarForm() {
+  $('#f-data-wrap').hidden = $('#f-quando').value !== 'data';
+  $('#f-horas').hidden = $('#f-periodo').value === 'extra';
+}
+function abrirForm() {
+  $('#form-tarefa').reset();
+  $('#f-data').value = iso(sel);
+  $('#f-erro').hidden = true;
+  atualizarForm();
+  $('#form-tarefa').hidden = false;
+  $('#abrir-form').hidden = true;
+  $('#f-titulo').focus();
+}
+function fecharForm() {
+  $('#form-tarefa').hidden = true;
+  $('#abrir-form').hidden = false;
+}
+function erroForm(msg) { $('#f-erro').textContent = msg; $('#f-erro').hidden = false; }
+
+$('#abrir-form').onclick = abrirForm;
+$('#f-cancelar').onclick = fecharForm;
+$('#f-quando').onchange = atualizarForm;
+$('#f-periodo').onchange = atualizarForm;
+$('#form-tarefa').onsubmit = e => {
+  e.preventDefault();
+  const titulo = $('#f-titulo').value.trim();
+  const quando = $('#f-quando').value;
+  const periodo = $('#f-periodo').value;
+  const data = $('#f-data').value;
+  const ini = periodo === 'extra' ? '' : $('#f-ini').value;
+  const fim = periodo === 'extra' ? '' : $('#f-fim').value;
+  if (!titulo) return erroForm('Escreva o nome da atividade.');
+  if (quando === 'data' && !data) return erroForm('Escolha a data da atividade.');
+  if (fim && !ini) return erroForm('Preencha o horário de início ou apague o de fim.');
+  if (ini && fim && minutos(fim) <= minutos(ini)) return erroForm('O fim precisa ser depois do início.');
+  adicionarTarefa({ t: titulo, d: $('#f-det').value.trim(), quando, data: quando === 'data' ? data : '', periodo, ini, fim });
+  fecharForm();
+};
+
+/* ---------- Eventos ---------- */
+$('#tab-dia').onclick = () => mostrar('dia');
+$('#tab-mes').onclick = () => { mesVisto = new Date(sel.getFullYear(), sel.getMonth(), 1); mostrar('mes'); };
+$('#dia-ant').onclick = () => moverDia(-1);
+$('#dia-prox').onclick = () => moverDia(1);
+$('#dia-hoje').onclick = () => { sel = new Date(hoje); confirmando = null; renderDia(); };
+$('#mes-ant').onclick = () => { mesVisto = new Date(mesVisto.getFullYear(), mesVisto.getMonth() - 1, 1); renderMes(); };
+$('#mes-prox').onclick = () => { mesVisto = new Date(mesVisto.getFullYear(), mesVisto.getMonth() + 1, 1); renderMes(); };
+$('#cal').onclick = e => {
+  const b = e.target.closest('[data-dia]'); if (!b) return;
+  sel = new Date(mesVisto.getFullYear(), mesVisto.getMonth(), Number(b.dataset.dia));
+  mostrar('dia');
+};
+$('#conteudo-dia').onchange = e => {
+  const id = e.target.dataset.id; if (!id) return;
+  const chave = iso(sel); const marcas = marcasDe(chave);
+  e.target.checked ? marcas.add(id) : marcas.delete(id);
+  salvarMarcas(chave, marcas); renderDia();
+};
+$('#conteudo-dia').onclick = e => {
+  const pedir = e.target.closest('[data-pedir-remocao]');
+  const remover = e.target.closest('[data-remover]');
+  if (pedir) { confirmando = pedir.dataset.pedirRemocao; renderDia(); }
+  else if (e.target.closest('[data-cancelar-remocao]')) { confirmando = null; renderDia(); }
+  else if (remover) { confirmando = null; removerTarefa(remover.dataset.remover); }
+};
+$('#limpar').onclick = () => { salvarMarcas(iso(sel), new Set()); renderDia(); };
+
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+setInterval(() => {
+  const agora = semHora(new Date());
+  if (iso(agora) !== iso(hoje)) hoje = agora;
+  if (aba === 'dia' && $('#form-tarefa').hidden) renderDia();
+}, 60000);
+setInterval(carregar, 120000);
+
+mostrar(local.ler('aba', 'dia') === 'mes' ? 'mes' : 'dia');
+if (estado.pin) carregar(); else pedirPin();
+</script>
+</body>
+</html>
